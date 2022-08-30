@@ -16,6 +16,7 @@
 
 package com.kunminx.puremusic.player.notification;
 
+import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationChannelGroup;
@@ -25,6 +26,7 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.os.Build;
 import android.os.IBinder;
 import android.view.View;
 import android.widget.RemoteViews;
@@ -37,10 +39,9 @@ import com.kunminx.architecture.utils.ImageUtils;
 import com.kunminx.puremusic.MainActivity;
 import com.kunminx.puremusic.R;
 import com.kunminx.puremusic.data.bean.TestAlbum;
-import com.kunminx.puremusic.data.config.Configs;
+import com.kunminx.puremusic.data.config.Const;
 import com.kunminx.puremusic.domain.usecase.DownloadUseCase;
 import com.kunminx.puremusic.player.PlayerManager;
-import com.kunminx.puremusic.player.helper.PlayerCallHelper;
 
 import java.io.File;
 
@@ -56,44 +57,15 @@ public class PlayerService extends Service {
     public static final String NOTIFY_NEXT = "pure_music.kunminx.next";
     private static final String GROUP_ID = "group_001";
     private static final String CHANNEL_ID = "channel_001";
-    private PlayerCallHelper mPlayerCallHelper;
     private DownloadUseCase mDownloadUseCase;
-
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-
-        if (mPlayerCallHelper == null) {
-            mPlayerCallHelper = new PlayerCallHelper(new PlayerCallHelper.PlayerCallHelperListener() {
-                @Override
-                public void playAudio() {
-                    PlayerManager.getInstance().playAudio();
-                }
-
-                @Override
-                public boolean isPlaying() {
-                    return PlayerManager.getInstance().isPlaying();
-                }
-
-                @Override
-                public boolean isPaused() {
-                    return PlayerManager.getInstance().isPaused();
-                }
-
-                @Override
-                public void pauseAudio() {
-                    PlayerManager.getInstance().pauseAudio();
-                }
-            });
-        }
-
         TestAlbum.TestMusic results = PlayerManager.getInstance().getCurrentPlayingMusic();
         if (results == null) {
             stopSelf();
             return START_NOT_STICKY;
         }
-
-        mPlayerCallHelper.bindCallListener(getApplicationContext());
 
         createNotification(results);
         return START_NOT_STICKY;
@@ -114,8 +86,9 @@ public class PlayerService extends Service {
 
             Intent intent = new Intent(getApplicationContext(), MainActivity.class);
             intent.setAction("showPlayer");
-            PendingIntent contentIntent = PendingIntent.getActivity(
-                this, 0, intent, 0);
+
+            PendingIntent contentIntent = PendingIntent.getActivity(this, 0, intent,
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_MUTABLE : 0);
 
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                 NotificationManager notificationManager = (NotificationManager)
@@ -162,7 +135,7 @@ public class PlayerService extends Service {
             notification.bigContentView.setTextViewText(R.id.player_author_name, summary);
             notification.flags |= Notification.FLAG_ONGOING_EVENT;
 
-            String coverPath = Configs.COVER_PATH + File.separator + testMusic.getMusicId() + ".jpg";
+            String coverPath = Const.COVER_PATH + File.separator + testMusic.getMusicId() + ".jpg";
             Bitmap bitmap = ImageUtils.getBitmap(coverPath);
 
             if (bitmap != null) {
@@ -176,35 +149,31 @@ public class PlayerService extends Service {
 
             startForeground(5, notification);
 
-            mPlayerCallHelper.bindRemoteController(getApplicationContext());
-            mPlayerCallHelper.requestAudioFocus(title, summary);
-
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
+    @SuppressLint("UnspecifiedImmutableFlag")
     public void setListeners(RemoteViews view) {
+        int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+            ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
+            : PendingIntent.FLAG_UPDATE_CURRENT;
         try {
             PendingIntent pendingIntent = PendingIntent.getBroadcast(getApplicationContext(),
-                0, new Intent(NOTIFY_PREVIOUS).setPackage(getPackageName()),
-                PendingIntent.FLAG_UPDATE_CURRENT);
+                0, new Intent(NOTIFY_PREVIOUS).setPackage(getPackageName()), flags);
             view.setOnClickPendingIntent(R.id.player_previous, pendingIntent);
             pendingIntent = PendingIntent.getBroadcast(getApplicationContext(),
-                0, new Intent(NOTIFY_CLOSE).setPackage(getPackageName()),
-                PendingIntent.FLAG_UPDATE_CURRENT);
+                0, new Intent(NOTIFY_CLOSE).setPackage(getPackageName()), flags);
             view.setOnClickPendingIntent(R.id.player_close, pendingIntent);
             pendingIntent = PendingIntent.getBroadcast(getApplicationContext(),
-                0, new Intent(NOTIFY_PAUSE).setPackage(getPackageName()),
-                PendingIntent.FLAG_UPDATE_CURRENT);
+                0, new Intent(NOTIFY_PAUSE).setPackage(getPackageName()), flags);
             view.setOnClickPendingIntent(R.id.player_pause, pendingIntent);
             pendingIntent = PendingIntent.getBroadcast(getApplicationContext(),
-                0, new Intent(NOTIFY_NEXT).setPackage(getPackageName()),
-                PendingIntent.FLAG_UPDATE_CURRENT);
+                0, new Intent(NOTIFY_NEXT).setPackage(getPackageName()), flags);
             view.setOnClickPendingIntent(R.id.player_next, pendingIntent);
             pendingIntent = PendingIntent.getBroadcast(getApplicationContext(),
-                0, new Intent(NOTIFY_PLAY).setPackage(getPackageName()),
-                PendingIntent.FLAG_UPDATE_CURRENT);
+                0, new Intent(NOTIFY_PLAY).setPackage(getPackageName()), flags);
             view.setOnClickPendingIntent(R.id.player_play, pendingIntent);
         } catch (Exception e) {
             e.printStackTrace();
@@ -224,8 +193,6 @@ public class PlayerService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
-        mPlayerCallHelper.unbindCallListener(getApplicationContext());
-        mPlayerCallHelper.unbindRemoteController();
     }
 
     @Nullable

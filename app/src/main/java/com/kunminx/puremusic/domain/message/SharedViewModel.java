@@ -18,59 +18,71 @@ package com.kunminx.puremusic.domain.message;
 
 import androidx.lifecycle.ViewModel;
 
-import com.kunminx.architecture.ui.callback.ProtectedUnPeekLiveData;
-import com.kunminx.architecture.ui.callback.UnPeekLiveData;
+import com.kunminx.architecture.domain.message.MutableResult;
+import com.kunminx.architecture.domain.message.Result;
 
 /**
- * TODO tip 1：event-ViewModel 的职责仅限于在 "跨页面通信" 的场景下，承担 "唯一可信源"，
- * 所有跨页面的 "状态同步请求" 都交由该可信源在内部决策和处理，并统一分发给所有订阅者页面。
+ * TODO tip 1：基于 "单一职责原则"，应将 ViewModel 划分为 state-ViewModel 和 Result-ViewModel，
+ * Result-ViewModel 职责仅限于 "消息分发" 场景承担 "唯一可信源"。
  * <p>
- * 如果这样说还不理解的话，详见《LiveData 鲜为人知的 身世背景 和 独特使命》中结合实际场合 对"唯一可信源"本质的解析。
- * https://xiaozhuanlan.com/topic/0168753249
+ * 常见消息分发场景包括：数据请求，页面间通信等，
+ * 数据请求 Requester 负责，页面通信 Messenger 负责，
+ * <p>
+ * 所有事件都可交由 "唯一可信源" 在内部决策和处理，并统一分发结果给所有订阅者页面。
+ * <p>
+ * 如这么说无体会，详见《吃透 LiveData 本质，享用可靠消息鉴权机制》解析。
+ * https://xiaozhuanlan.com/topic/6017825943
  *
  * <p>
  * Create by KunMinX at 19/10/16
+ *
+ *
+ *
+ *
+ *
+ * TODO:Note 2022.07.04
+ * 可于领域层通过 MVI-Dispatcher 实现成熟形态 "唯一可信源"，
+ * 使支持 LiveData 连续发送多种类事件 + 彻底消除 mutable 样板代码 + 彻底杜绝团队新手 LiveData.setValue 误用滥用，
+ * 鉴于本项目场景难发挥 MVI-Dispatcher 潜能，故目前仅以改造 SharedViewModel 为例，
+ * 通过对比 SharedViewModel 和 PageMessenger 易得，后者可简洁优雅实现可靠一致消息分发，
+ *
+ * 具体可参见专为 MVI-Dispatcher 唯一可信源编写之 MVI 绝佳使用案例：
+ *
+ * https://github.com/KunMinX/MVI-Dispatcher
  */
+@Deprecated
 public class SharedViewModel extends ViewModel {
 
-    //TODO tip 2：此处演示通过 UnPeekLiveData 配合 SharedViewModel 来发送 生命周期安全的、
-    // 确保消息同步一致性和可靠性的 "跨页面" 通知。
+    //TODO tip 2：此处演示 UnPeekLiveData 配合 SharedViewModel 实现 "生命周期安全、可靠一致" 消息分发。
 
-    //TODO tip 3：并且，在 "页面通信" 的场景下，使用全局 ViewModel，是因为它被封装在 base 页面中，
-    // 避免页面之外的组件拿到，从而造成不可预期的推送。
-    // 而且尽可能使用单例或 ViewModel 托管 liveData，这样能利用好 LiveData "读写分离" 的特性
-    // 来实现 "唯一可信源" 单向数据流的决策和分发，从而避免只读数据被篡改 导致的其他页面拿到脏数据。
+    //TODO tip 3：为便于理解，原 UnPeekLiveData 已改名 MutableResult；
+    // ProtectedUnPeekLiveData 改名 Result；
+    // SharedViewModel 改名 PageMessenger。
 
-    // 如果这么说还不理解的话，
-    // 详见 https://xiaozhuanlan.com/topic/0168753249 和 https://xiaozhuanlan.com/topic/6257931840
+    private final MutableResult<Boolean> toCloseSlidePanelIfExpanded = new MutableResult<>();
 
-    private final UnPeekLiveData<Boolean> toCloseSlidePanelIfExpanded = new UnPeekLiveData<>();
+    private final MutableResult<Boolean> toCloseActivityIfAllowed = new MutableResult<>();
 
-    private final UnPeekLiveData<Boolean> toCloseActivityIfAllowed = new UnPeekLiveData<>();
+    private final MutableResult<Boolean> toOpenOrCloseDrawer = new MutableResult<>();
 
-    private final UnPeekLiveData<Boolean> toOpenOrCloseDrawer = new UnPeekLiveData<>();
+    //TODO tip 4：可通过构造器方式配置 MutableResult
 
-    //TODO tip 4：可以通过构造器的方式来配置 UnPeekLiveData
+    private final MutableResult<Boolean> toAddSlideListener =
+        new MutableResult.Builder<Boolean>().setAllowNullValue(false).create();
 
-    // 具体存在有缘和使用方式可详见《LiveData 数据倒灌 背景缘由全貌 独家解析》
-    // https://xiaozhuanlan.com/topic/6719328450
-
-    private final UnPeekLiveData<Boolean> toAddSlideListener =
-        new UnPeekLiveData.Builder<Boolean>().setAllowNullValue(false).create();
-
-    public ProtectedUnPeekLiveData<Boolean> isToAddSlideListener() {
+    public Result<Boolean> isToAddSlideListener() {
         return toAddSlideListener;
     }
 
-    public ProtectedUnPeekLiveData<Boolean> isToCloseSlidePanelIfExpanded() {
+    public Result<Boolean> isToCloseSlidePanelIfExpanded() {
         return toCloseSlidePanelIfExpanded;
     }
 
-    public ProtectedUnPeekLiveData<Boolean> isToCloseActivityIfAllowed() {
+    public Result<Boolean> isToCloseActivityIfAllowed() {
         return toCloseActivityIfAllowed;
     }
 
-    public ProtectedUnPeekLiveData<Boolean> isToOpenOrCloseDrawer() {
+    public Result<Boolean> isToOpenOrCloseDrawer() {
         return toOpenOrCloseDrawer;
     }
 

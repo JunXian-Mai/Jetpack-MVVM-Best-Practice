@@ -19,30 +19,29 @@ package com.kunminx.puremusic.player;
 import android.content.Context;
 import android.content.Intent;
 
-import androidx.lifecycle.LiveData;
-
 import com.danikula.videocache.HttpProxyCacheServer;
 import com.kunminx.player.PlayerController;
-import com.kunminx.player.bean.dto.ChangeMusic;
-import com.kunminx.player.bean.dto.PlayingMusic;
+import com.kunminx.player.PlayingInfoManager;
 import com.kunminx.player.contract.ICacheProxy;
 import com.kunminx.player.contract.IPlayController;
 import com.kunminx.player.contract.IServiceNotifier;
+import com.kunminx.player.domain.PlayerInfoDispatcher;
 import com.kunminx.puremusic.data.bean.TestAlbum;
 import com.kunminx.puremusic.player.helper.PlayerFileNameGenerator;
 import com.kunminx.puremusic.player.notification.PlayerService;
 
-import java.util.ArrayList;
+import net.steamcrafted.materialiconlib.MaterialDrawableBuilder;
+
 import java.util.List;
 
 /**
  * Create by KunMinX at 19/10/31
  */
-public class PlayerManager implements IPlayController<TestAlbum, TestAlbum.TestMusic> {
+public class PlayerManager implements IPlayController<TestAlbum, TestAlbum.TestMusic, TestAlbum.TestArtist> {
 
     private static final PlayerManager sManager = new PlayerManager();
 
-    private final PlayerController<TestAlbum, TestAlbum.TestMusic> mController;
+    private final PlayerController<TestAlbum, TestAlbum.TestMusic, TestAlbum.TestArtist> mController;
 
     private PlayerManager() {
         mController = new PlayerController<>();
@@ -52,39 +51,32 @@ public class PlayerManager implements IPlayController<TestAlbum, TestAlbum.TestM
         return sManager;
     }
 
-    private HttpProxyCacheServer mProxy;
-
-    public void init(Context context) {
-        init(context, null, null);
-    }
+  public void init(Context context) {
+    init(context, null, null);
+  }
 
     @Override
     public void init(Context context, IServiceNotifier iServiceNotifier, ICacheProxy iCacheProxy) {
         Context context1 = context.getApplicationContext();
 
-        mProxy = new HttpProxyCacheServer.Builder(context1)
-            .fileNameGenerator(new PlayerFileNameGenerator())
-            .maxCacheSize(2147483648L) // 2GB
-            .build();
+    HttpProxyCacheServer proxy = new HttpProxyCacheServer.Builder(context1)
+      .fileNameGenerator(new PlayerFileNameGenerator())
+      .maxCacheSize(2147483648L)
+      .build();
 
-        //添加额外的音乐格式
-        List<String> extraFormats = new ArrayList<>();
-        extraFormats.add(".flac");
-        extraFormats.add(".ape");
-
-        mController.init(context1, extraFormats, startOrStop -> {
-            Intent intent = new Intent(context1, PlayerService.class);
-            if (startOrStop) {
-                context1.startService(intent);
-            } else {
-                context1.stopService(intent);
-            }
-        }, url -> mProxy.getProxyUrl(url));
-    }
+    mController.init(context1, startOrStop -> {
+      Intent intent = new Intent(context1, PlayerService.class);
+      if (startOrStop) context1.startService(intent);
+      else context1.stopService(intent);
+    }, proxy::getProxyUrl);
+  }
 
     @Override
     public void loadAlbum(TestAlbum musicAlbum) {
-        mController.loadAlbum(musicAlbum);
+        TestAlbum album = mController.getAlbum();
+        if (album == null || !album.getAlbumId().equals(musicAlbum.getAlbumId())) {
+            mController.loadAlbum(musicAlbum);
+        }
     }
 
     @Override
@@ -168,6 +160,11 @@ public class PlayerManager implements IPlayController<TestAlbum, TestAlbum.TestM
     }
 
     @Override
+    public PlayerInfoDispatcher getDispatcher() {
+        return mController.getDispatcher();
+    }
+
+    @Override
     public TestAlbum getAlbum() {
         return mController.getAlbum();
     }
@@ -187,25 +184,8 @@ public class PlayerManager implements IPlayController<TestAlbum, TestAlbum.TestM
         return mController.getAlbumIndex();
     }
 
-    public LiveData<ChangeMusic> getChangeMusicEvent() {
-        return mController.getChangeMusicEvent();
-    }
-
-    public LiveData<PlayingMusic> getPlayingMusicEvent() {
-        return mController.getPlayingMusicEvent();
-    }
-
-    public LiveData<Boolean> getPauseEvent() {
-        return mController.getPauseEvent();
-    }
-
     @Override
-    public LiveData<Enum> getPlayModeEvent() {
-        return mController.getPlayModeEvent();
-    }
-
-    @Override
-    public Enum getRepeatMode() {
+    public Enum<PlayingInfoManager.RepeatMode> getRepeatMode() {
         return mController.getRepeatMode();
     }
 
@@ -217,5 +197,19 @@ public class PlayerManager implements IPlayController<TestAlbum, TestAlbum.TestM
     @Override
     public TestAlbum.TestMusic getCurrentPlayingMusic() {
         return mController.getCurrentPlayingMusic();
+    }
+
+    public MaterialDrawableBuilder.IconValue getModeIcon(Enum<PlayingInfoManager.RepeatMode> mode) {
+        if (mode == PlayingInfoManager.RepeatMode.LIST_CYCLE) {
+            return MaterialDrawableBuilder.IconValue.REPEAT;
+        } else if (mode == PlayingInfoManager.RepeatMode.SINGLE_CYCLE) {
+            return MaterialDrawableBuilder.IconValue.REPEAT_ONCE;
+        } else {
+            return MaterialDrawableBuilder.IconValue.SHUFFLE;
+        }
+    }
+
+    public MaterialDrawableBuilder.IconValue getModeIcon() {
+        return getModeIcon(getRepeatMode());
     }
 }
